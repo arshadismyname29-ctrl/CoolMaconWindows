@@ -1,0 +1,9 @@
+bin/
+obj/
+artifacts/
+*.user
+*.log
+Folder Preview/
+desktop.ini
+.coolmac-folder*.ico
+.coolmac-folder.json
