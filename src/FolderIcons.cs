@@ -55,7 +55,7 @@ namespace CoolMac
                 || record.IconHashes == null || record.IniHashes == null) throw new InvalidDataException("This folder's icon backup is invalid. Its files were left unchanged.");
             record.Folder = folder; return record;
         }
-        internal FolderBackup Apply(string folder, string theme, string symbol)
+        internal FolderBackup Apply(string folder, string theme, string symbol, Action<FolderBackup> beforeWrite = null)
         {
             folder = Normalize(folder); FolderArt.Theme(theme);
             if (symbol == "auto") symbol = FolderArt.AutoSymbol(folder);
@@ -79,6 +79,7 @@ namespace CoolMac
             byte[] ini = UnicodeBytes(Patch(existing, new[] { "IconResource=" + record.IconName + ",0" }));
             record.Theme = theme; record.Symbol = symbol;
             AddHash(record.IconHashes, Hash(icon)); AddHash(record.IniHashes, Hash(ini));
+            if (beforeWrite != null) beforeWrite(record);
             Directory.CreateDirectory(Storage); SaveRecord(record); // Durable backup before changing the icon or desktop.ini.
             Write(iconPath, icon); File.SetAttributes(iconPath, FileAttributes.Hidden | FileAttributes.System);
             FileAttributes attributes = File.Exists(iniPath) ? File.GetAttributes(iniPath) : FileAttributes.Archive;

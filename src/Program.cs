@@ -16,6 +16,12 @@ namespace CoolMac
         private static int Main(string[] args)
         {
             if (args.Length > 0 && args[0] == "--global-folder-helper") return GlobalFolderTheme.Helper(args);
+            if (args.Length > 0 && args[0] == "--refresh-global-folders")
+            {
+                GlobalFolderBackup theme = GlobalFolderTheme.Read();
+                if (theme == null || !GlobalFolderTheme.Enabled()) return 1;
+                GlobalFolderTheme.ApplyCommonFolders(theme.Theme); GlobalFolderTheme.Refresh(); return 0;
+            }
             if (args.Length > 0 && args[0] == "--apply-global-folders")
             {
                 FolderThemeResponse response = GlobalFolderTheme.RunElevated(GlobalFolderTheme.Read() == null ? "verify-apply" : "apply", "blue");

@@ -1,6 +1,6 @@
 # CoolMaconWindows
 
-A native Windows dock with a mac-inspired floating shelf. Windows apps keep their own icons and behavior. This first version focuses on the dock.
+A native Windows dock with a mac-inspired floating shelf and folder icons. Windows apps keep their own icons and behavior.
 
 ## Run
 
@@ -10,11 +10,19 @@ Double-click **launch.cmd**, or run **bin/CoolMacDock.exe** after building. The 
 
 The exact EXE location in this checkout is `C:\Users\ferro\Desktop\Project AI\CoolMaconWindows\bin\CoolMacDock.exe`. The control window also has an **Open EXE folder** button.
 
-The dock does not install a service or configure startup. It runs as the current user without administrator privileges. Preferences are stored in `%LOCALAPPDATA%\CoolMaconWindows\settings.json`.
+The dock does not install a service or configure startup. It runs as the current user; changing Windows default folder icons requests administrator permission through Windows. Preferences are stored in `%LOCALAPPDATA%\CoolMaconWindows\settings.json`.
 
 ## Folder icons
 
 Click **Folder icons** in the control window. This works whether the dock is on or off.
+
+For the whole PC, choose a color and click **Apply across Windows**. Approve the Windows permission prompt. This changes default open and closed folder icons in both Windows registry views, then refreshes Explorer. Ordinary folders, including newly created folders, use the new default. Common user folders and folders directly on the current user's desktop receive explicit icons too, so desktop folder previews use the chosen artwork. Public desktop folders are included when writable. Existing individually styled CoolMac folders are preserved.
+
+**Restore Windows icons** restores the saved registry values and the common/desktop folders styled by this action. The original registry backup and shared artwork are kept in `C:\ProgramData\CoolMaconWindows\FolderTheme`. Individual folder backups remain in the locations described below. Later overrides made by another application or individual CoolMac styling are preserved. Folder thumbnails elsewhere, special system folders, and folders with their own custom icons may retain their appearance.
+
+Use **Refresh Explorer** after adding more folders to your desktop; it applies the active theme to those folders as well.
+
+For an individual folder:
 
 1. Choose **Classic blue**, **Soft teal**, or **Lavender**.
 2. Choose a folder with **Choose folder…**, or drag a folder into the window.
@@ -24,11 +32,11 @@ Click **Folder icons** in the control window. This works whether the dock is on 
 
 Folder icons stay applied when the app closes or the dock is switched off. They are independent of the dock's on/off control. **Styled folders** lists folders managed by the app. **Open in Explorer** opens the currently selected folder.
 
-The artwork is original vector art inspired by macOS folder shapes, supplied in ten Windows icon sizes from 16 to 256 pixels. Windows' documented `desktop.ini` folder customization is used; this feature styles selected folders rather than globally replacing the Windows default folder icon.
+The artwork is original vector art inspired by macOS folder shapes, supplied in ten Windows icon sizes from 16 to 256 pixels. Individual customization uses Windows' documented `desktop.ini` mechanism. The global option changes Explorer's default folder icon registry entries without replacing Windows system files.
 
 Each selected folder receives a hidden icon file and a hidden `.coolmac-folder.json` backup. An index is kept in `%LOCALAPPDATA%\CoolMaconWindows\FolderBackups`. The backup preserves original `desktop.ini` bytes and attributes. Restoring after later changes preserves unrelated metadata and icons set by another application. Icon paths are relative, and backups travel with a folder when it is renamed or moved. Do not delete these backup files before restoring.
 
-Folder customization requires a writable local folder. Drive roots and linked folders are excluded. Explorer can take a moment to refresh a changed icon; reopen its parent folder or press F5 if necessary. The app does not restart Explorer or clear the system icon cache.
+Individual customization requires a writable local folder. Drive roots and linked folders are excluded. Explorer can take a moment to refresh a changed icon; reopen its parent folder or press F5 if necessary. The global controls refresh the icon cache and restart the current user's Explorer shell, reopening filesystem folder windows. If a visible file-transfer window is detected, the restart is deferred. Photo and video thumbnail settings remain unchanged.
 
 The `Folder Preview` directory contains styled Projects, Documents, and Downloads examples. The preview folders have no personal files.
 
@@ -72,6 +80,8 @@ The script uses the framework compiler in `%WINDIR%\Microsoft.NET\Framework64\v4
 
 `build.ps1 -Verify` checks shell icon extraction, pin handling, persisted preferences, corrupt-settings fallback, and animation calculations. It also applies/restores folder styles inside unique test fixtures under `artifacts/`, checks original metadata and attributes, preserves later edits, tests moved-folder restoration and filename collisions, and confirms Windows resolves the new folder icon. Actual WPF controls and all icon variants are rendered into `artifacts/` for visual inspection.
 
+`tools/verify-desktop-folders.ps1` checks actual Windows shell images for desktop folders with thumbnail retrieval enabled and saves previews in `artifacts/desktop-folders`. Run this after applying the blue theme.
+
 To additionally check the real taskbar in an interactive Windows session:
 
 ```powershell
@@ -86,7 +96,7 @@ This briefly hides/restores the taskbar, checks the work area reserved for maxim
 - Running apps are grouped by executable path. Some Store apps and application hosts may need dedicated identity handling, and elevated apps can restrict window switching.
 - The shelf uses layered transparency and a gradient; it does not apply desktop blur.
 - Window thumbnails, taskbar progress badges, Jump Lists, a tray/clock replacement, and startup installation are future work.
-- Folder icon customization applies to selected filesystem folders. Explorer's overall layout, app title bars, and system window animations are outside this version's scope.
+- Folder icons cover Windows defaults and selected filesystem folders. Explorer's overall layout, app title bars, and system window animations are outside this version's scope.
 
 ## Implementation
 
@@ -98,6 +108,7 @@ This briefly hides/restores the taskbar, checks the work area reserved for maxim
 - `src/ControlWindow.cs`: running status, on/off controls, remembered enabled state, and reopening the running app.
 - `src/FolderArt.cs`: original folder artwork, color variants, embossed symbols, and multi-size ICO generation.
 - `src/FolderIcons.cs`: per-folder customization, durable backups, restoration, and shell refresh notifications.
+- `src/GlobalFolderTheme.cs`: default Windows folder icons, elevated helper, desktop/common-folder styling, and Explorer refresh.
 - `src/FolderWindow.cs`: previews, folder picker, and managed-folder controls.
 - `src/FolderVerification.cs`: folder styling and restoration verification.
 

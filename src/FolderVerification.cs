@@ -18,6 +18,11 @@ namespace CoolMac
         {
             string root = Path.Combine(directory, "folder-tests-" + Guid.NewGuid().ToString("N").Substring(0, 8)); Directory.CreateDirectory(root);
             FolderIcons icons = new FolderIcons(Path.Combine(root, "backups"));
+            string journalFailure = Path.Combine(root, "Journal failure"); Directory.CreateDirectory(journalFailure);
+            bool journalRejected = false;
+            try { icons.Apply(journalFailure, "blue", "none", delegate(FolderBackup record) { throw new IOException("Simulated ownership journal failure"); }); }
+            catch (IOException) { journalRejected = true; }
+            Check(journalRejected && Directory.GetFiles(journalFailure).Length == 0 && (File.GetAttributes(journalFailure) & FileAttributes.ReadOnly) == 0, "Ownership journal failure prevents folder changes before backups can be tracked", report);
             string plain = Path.Combine(root, "Plain folder"); Directory.CreateDirectory(plain);
             string sentinel = Path.Combine(plain, "keep.txt"); File.WriteAllText(sentinel, "User content stays intact.");
             FileAttributes initialAttributes = File.GetAttributes(plain);

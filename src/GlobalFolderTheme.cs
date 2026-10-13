@@ -38,6 +38,8 @@ namespace CoolMac
     {
         public string Folder { get; set; }
         public string BackupId { get; set; }
+        public string Theme { get; set; }
+        public string Symbol { get; set; }
     }
     internal static class GlobalFolderTheme
     {
@@ -226,18 +228,26 @@ namespace CoolMac
         internal static int ApplyCommonFolders(string theme)
         {
             FolderIcons icons = FolderIcons.Default(); List<CommonFolderTheme> entries = ReadCommon();
-            string[] folders = new[] { Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads") };
+            List<string> folders = new List<string> { Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), Environment.GetFolderPath(Environment.SpecialFolder.MyVideos), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads") };
+            // Desktop folder thumbnails need explicit icons in addition to the global defaults.
+            foreach (string desktop in new[] { Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory) })
+                try { if (Directory.Exists(desktop)) folders.AddRange(Directory.GetDirectories(desktop)); }
+                catch (Exception error) { SettingsStore.Log(error); }
             int changed = 0;
             foreach (string folder in folders.Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                if (String.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder) || (File.GetAttributes(folder) & FileAttributes.ReparsePoint) != 0) continue;
                 try
                 {
+                    if (String.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder) || (File.GetAttributes(folder) & FileAttributes.ReparsePoint) != 0) continue;
                     FolderBackup previous = icons.Read(folder); CommonFolderTheme tracked = entries.FirstOrDefault(entry => String.Equals(entry.Folder, folder, StringComparison.OrdinalIgnoreCase));
-                    if (previous != null && (tracked == null || previous.Id != tracked.BackupId)) continue;
-                    FolderBackup applied = icons.Apply(folder, theme, "auto");
-                    if (tracked == null) entries.Add(new CommonFolderTheme { Folder = folder, BackupId = applied.Id });
-                    WriteJson(CommonPath, entries); changed++;
+                    if (previous != null && (tracked == null || !Matches(previous, tracked))) continue;
+                    icons.Apply(folder, theme, "auto", delegate(FolderBackup applied)
+                    {
+                        if (tracked == null) { tracked = new CommonFolderTheme { Folder = folder }; entries.Add(tracked); }
+                        tracked.BackupId = applied.Id; tracked.Theme = applied.Theme; tracked.Symbol = applied.Symbol;
+                        WriteJson(CommonPath, entries); // Persist ownership before any folder metadata is changed.
+                    });
+                    changed++;
                 }
                 catch (Exception error) { SettingsStore.Log(error); }
             }
@@ -248,10 +258,14 @@ namespace CoolMac
             FolderIcons icons = FolderIcons.Default(); List<CommonFolderTheme> remaining = new List<CommonFolderTheme>();
             foreach (CommonFolderTheme entry in ReadCommon())
             {
-                try { if (Directory.Exists(entry.Folder)) { FolderBackup record = icons.Read(entry.Folder); if (record != null && record.Id == entry.BackupId) icons.Restore(entry.Folder); } }
+                try { if (Directory.Exists(entry.Folder)) { FolderBackup record = icons.Read(entry.Folder); if (record != null && Matches(record, entry)) icons.Restore(entry.Folder); } }
                 catch (Exception error) { SettingsStore.Log(error); remaining.Add(entry); }
             }
             WriteJson(CommonPath, remaining);
+        }
+        private static bool Matches(FolderBackup record, CommonFolderTheme entry)
+        {
+            return record.Id == entry.BackupId && record.Theme == (entry.Theme ?? "blue") && record.Symbol == (entry.Symbol ?? FolderArt.AutoSymbol(entry.Folder));
         }
         private static List<CommonFolderTheme> ReadCommon()
         {

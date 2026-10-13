@@ -59,7 +59,7 @@ namespace CoolMac
             globalRestore = SettingsWindow.ActionButton("Restore Windows icons", delegate { ChangeGlobal(false); }, false);
             refresh = SettingsWindow.ActionButton("Refresh Explorer", RefreshExplorer, false);
             globalButtons.Children.Add(globalApply); globalButtons.Children.Add(globalRestore); globalButtons.Children.Add(refresh); globalContent.Children.Add(globalButtons);
-            globalContent.Children.Add(SettingsWindow.Text("Custom folder icons and thumbnail previews can have their own appearance. Common user folders are included when available.", 11, "#99A6BA", new Thickness(0, 12, 0, 0)));
+            globalContent.Children.Add(SettingsWindow.Text("Includes common user folders and folders on your desktop. Elsewhere, custom icons and thumbnail previews may have their own appearance.", 11, "#99A6BA", new Thickness(0, 12, 0, 0)));
             body.Children.Add(globalCard);
             Grid badge = new Grid { Margin = new Thickness(0, 0, 0, 18) };
             badge.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); badge.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -163,7 +163,7 @@ namespace CoolMac
                     {
                         int common = 0; if (enable) common = GlobalFolderTheme.ApplyCommonFolders(theme); else GlobalFolderTheme.RestoreCommonFolders();
                         GlobalFolderTheme.Refresh(); bool restarted = GlobalFolderTheme.RestartExplorer();
-                        response.Message = (enable ? "Default folder theme applied. " + common + " common folders styled." : "Windows folder icons restored.") + (restarted ? " Explorer refreshed." : " Finish any file transfers, then refresh Explorer.");
+                        response.Message = (enable ? "Default folder theme applied. " + common + " desktop and common folders styled." : "Windows folder icons restored.") + (restarted ? " Explorer refreshed." : " Finish any file transfers, then refresh Explorer.");
                     }
                 }
                 catch (Exception error) { response = new FolderThemeResponse { Success = false, Message = error.Message }; }
@@ -177,7 +177,15 @@ namespace CoolMac
         }
         private void RefreshExplorer()
         {
-            try { GlobalFolderTheme.Refresh(); bool refreshed = GlobalFolderTheme.RestartExplorer(); status.Text = refreshed ? "Explorer refreshed." : "Finish current file transfers before refreshing Explorer."; if (refreshed && IconsChanged != null) IconsChanged(); }
+            try
+            {
+                GlobalFolderBackup theme = GlobalFolderTheme.Read();
+                if (theme != null && GlobalFolderTheme.Enabled()) GlobalFolderTheme.ApplyCommonFolders(theme.Theme);
+                GlobalFolderTheme.Refresh(); bool refreshed = GlobalFolderTheme.RestartExplorer();
+                RefreshManaged(); UpdatePreview();
+                status.Text = refreshed ? "Desktop folder icons and Explorer refreshed." : "Folder icons updated. Finish current file transfers before refreshing Explorer.";
+                if (IconsChanged != null) IconsChanged();
+            }
             catch (Exception error) { ShowError(error); }
         }
         private void ShowError(Exception error) { status.Foreground = DockWindow.Brush("#F4B1A4"); status.Text = error.Message; }
