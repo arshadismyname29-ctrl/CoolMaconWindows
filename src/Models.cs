@@ -48,6 +48,7 @@ namespace CoolMac
         public bool AutoHide { get; set; }
         public bool ReduceMotion { get; set; }
         public bool DockEnabled { get; set; }
+        public bool TopBarEnabled { get; set; }
         public string MonitorDevice { get; set; }
         public List<Pin> Pins { get; set; }
         public Preferences() { IconSize = 48; Magnification = 1.55; Opacity = 0.80; HideTaskbar = true; DockEnabled = true; Pins = new List<Pin>(); }
@@ -89,8 +90,18 @@ namespace CoolMac
         internal static void Save(Preferences preferences, string path)
         {
             preferences.Normalize(); Directory.CreateDirectory(Path.GetDirectoryName(path));
-            string temporary = path + ".tmp"; File.WriteAllText(temporary, new JavaScriptSerializer().Serialize(preferences));
-            if (File.Exists(path)) File.Replace(temporary, path, null); else File.Move(temporary, path);
+            string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(temporary, new JavaScriptSerializer().Serialize(preferences));
+                // Explorer and antivirus can briefly hold a settings file during an atomic replacement.
+                for (int attempt = 0; ; attempt++)
+                {
+                    try { if (File.Exists(path)) File.Replace(temporary, path, null); else File.Move(temporary, path); break; }
+                    catch (IOException) { if (attempt >= 11) throw; System.Threading.Thread.Sleep(50); }
+                }
+            }
+            finally { if (File.Exists(temporary)) File.Delete(temporary); }
         }
         internal static void Log(Exception error)
         {

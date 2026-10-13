@@ -15,9 +15,12 @@ namespace CoolMac
         internal readonly ControlWindow View;
         private readonly bool preview, rememberSettings;
         private DockWindow dock;
+        private TopBarWindow topBar;
         private FolderWindow folders;
         private bool exiting;
         internal bool IsRunning { get { return dock != null; } }
+        internal bool IsTopBarRunning { get { return topBar != null; } }
+        internal TopBarWindow TopBar { get { return topBar; } }
         internal bool Exiting { get { return exiting; } }
         internal bool HasOpenTools { get { return folders != null && folders.IsVisible; } }
         internal bool ExitWhenWindowCloses { get { return rememberSettings && !preview; } }
@@ -48,6 +51,27 @@ namespace CoolMac
             if (current != null) current.Close();
             Preferences.DockEnabled = false; Save(); View.RefreshState();
         }
+        internal void StartTopBar()
+        {
+            if (topBar != null || exiting) return;
+            TopBarWindow next = new TopBarWindow(this, preview);
+            if (preview) { next.Left = -20000; next.Top = -20000; }
+            topBar = next;
+            next.Closed += delegate
+            {
+                if (topBar != next) return;
+                topBar = null; Preferences.TopBarEnabled = false; Save(); View.RefreshState();
+                if (!exiting && !preview && !View.IsVisible && !IsRunning) ShowControl();
+            };
+            try { next.Show(); Preferences.TopBarEnabled = true; Save(); View.RefreshState(); }
+            catch { topBar = null; next.Cleanup(); next.Close(); View.RefreshState(); throw; }
+        }
+        internal void StopTopBar()
+        {
+            if (topBar != null) topBar.Close();
+            Preferences.TopBarEnabled = false; Save(); View.RefreshState();
+        }
+        internal void ToggleTopBar() { if (IsTopBarRunning) StopTopBar(); else StartTopBar(); }
         internal void ShowControl()
         {
             if (exiting) return;
@@ -71,9 +95,9 @@ namespace CoolMac
         }
         internal void Exit()
         {
-            if (exiting) return; exiting = true; StopDock(); Application.Current.Shutdown();
+            if (exiting) return; exiting = true; StopTopBar(); StopDock(); Application.Current.Shutdown();
         }
-        internal void Cleanup() { exiting = true; if (dock != null) dock.Cleanup(); }
+        internal void Cleanup() { exiting = true; if (topBar != null) topBar.Cleanup(); if (dock != null) dock.Cleanup(); }
         private void Save()
         {
             if (!rememberSettings) return;
@@ -88,25 +112,29 @@ namespace CoolMac
         internal static readonly uint OffMessage = Native.RegisterWindowMessage("CoolMaconWindows.Control.Off");
         internal static readonly uint ExitMessage = Native.RegisterWindowMessage("CoolMaconWindows.Control.Exit");
         internal static readonly uint FolderMessage = Native.RegisterWindowMessage("CoolMaconWindows.Control.Folders");
+        internal static readonly uint TopBarMessage = Native.RegisterWindowMessage("CoolMaconWindows.Control.TopBar");
+        internal static readonly uint TopBarOffMessage = Native.RegisterWindowMessage("CoolMaconWindows.Control.TopBarOff");
         private readonly DockController controller;
         private readonly TextBlock state = new TextBlock();
         private readonly TextBlock detail = new TextBlock();
         private readonly Border dot = new Border();
         private readonly TextBlock closing = new TextBlock();
         private readonly TextBlock error = new TextBlock();
+        private readonly TextBlock topBarState = new TextBlock();
         internal readonly Button OnButton, OffButton;
+        internal readonly Button TopBarOnButton, TopBarOffButton;
         private readonly Button settings;
         internal ControlWindow(DockController owner)
         {
-            controller = owner; Title = WindowTitle; Width = 530; Height = 560;
+            controller = owner; Title = WindowTitle; Width = 550; Height = 740;
             ResizeMode = ResizeMode.NoResize; WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Background = DockWindow.Brush("#151A24"); Foreground = Brushes.White; FontFamily = new FontFamily("Segoe UI");
             ImageSource icon = Native.Icon(Process.GetCurrentProcess().MainModule.FileName); if (icon != null) Icon = icon;
             StackPanel body = new StackPanel { Margin = new Thickness(30, 26, 30, 24) };
             Content = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-            body.Children.Add(SettingsWindow.Text("COOLMAC / WINDOWS DOCK", 11, "#8EA6CF", new Thickness(0, 0, 0, 10)));
-            body.Children.Add(SettingsWindow.Text("Dock controls", 30, "#F1F4FA", new Thickness(0, 0, 0, 5)));
-            body.Children.Add(SettingsWindow.Text("Control your dock and return to the Windows taskbar.", 13, "#99A6BA", new Thickness(0, 0, 0, 24)));
+            body.Children.Add(SettingsWindow.Text("COOLMAC / WINDOWS DESKTOP", 11, "#8EA6CF", new Thickness(0, 0, 0, 10)));
+            body.Children.Add(SettingsWindow.Text("Desktop controls", 30, "#F1F4FA", new Thickness(0, 0, 0, 5)));
+            body.Children.Add(SettingsWindow.Text("Your dock, top bar, and folder appearance.", 13, "#99A6BA", new Thickness(0, 0, 0, 24)));
             Border card = new Border { CornerRadius = new CornerRadius(16), Background = DockWindow.Brush("#202A3A"), BorderBrush = DockWindow.Brush("#33445C"), BorderThickness = new Thickness(1), Padding = new Thickness(20), Margin = new Thickness(0, 0, 0, 18) };
             StackPanel cardBody = new StackPanel(); card.Child = cardBody;
             StackPanel heading = new StackPanel { Orientation = Orientation.Horizontal };
@@ -117,6 +145,14 @@ namespace CoolMac
             OnButton = SettingsWindow.ActionButton("Turn on dock", controller.StartDock, true); OnButton.Width = 185; OnButton.Height = 42;
             OffButton = SettingsWindow.ActionButton("Turn off dock", controller.StopDock, false); OffButton.Width = 185; OffButton.Height = 42;
             buttons.Children.Add(OnButton); buttons.Children.Add(OffButton); cardBody.Children.Add(buttons); body.Children.Add(card);
+            Border barCard = new Border { CornerRadius = new CornerRadius(16), Background = DockWindow.Brush("#202A3A"), BorderBrush = DockWindow.Brush("#33445C"), BorderThickness = new Thickness(1), Padding = new Thickness(20), Margin = new Thickness(0, 0, 0, 18) };
+            StackPanel barBody = new StackPanel(); barCard.Child = barBody;
+            topBarState.FontSize = 17; topBarState.FontWeight = FontWeights.SemiBold; topBarState.Foreground = Brushes.White; barBody.Children.Add(topBarState);
+            barBody.Children.Add(SettingsWindow.Text("App windows, sound, network, and calendar. Works independently of the dock. Ctrl+Alt+M toggles the bar.", 12, "#B3C2D7", new Thickness(0, 8, 0, 16)));
+            StackPanel barButtons = new StackPanel { Orientation = Orientation.Horizontal };
+            TopBarOnButton = SettingsWindow.ActionButton("Turn on top bar", controller.StartTopBar, true); TopBarOnButton.Width = 185; TopBarOnButton.Height = 42;
+            TopBarOffButton = SettingsWindow.ActionButton("Turn off top bar", controller.StopTopBar, false); TopBarOffButton.Width = 185; TopBarOffButton.Height = 42;
+            barButtons.Children.Add(TopBarOnButton); barButtons.Children.Add(TopBarOffButton); barBody.Children.Add(barButtons); body.Children.Add(barCard);
             StackPanel actions = new StackPanel { Orientation = Orientation.Horizontal };
             settings = SettingsWindow.ActionButton("Dock settings", controller.ShowSettings, false); actions.Children.Add(settings);
             actions.Children.Add(SettingsWindow.ActionButton("Folder icons", controller.ShowFolders, false));
@@ -127,21 +163,25 @@ namespace CoolMac
             SourceInitialized += delegate
             {
                 IntPtr handle = new WindowInteropHelper(this).Handle;
+                if (controller.ExitWhenWindowCloses) Native.RegisterHotKey(handle, 2, 0x4003, 0x4D);
                 HwndSource.FromHwnd(handle).AddHook(delegate(IntPtr window, int message, IntPtr wp, IntPtr lp, ref bool handled)
                 {
                     if ((uint)message == ShowMessage) { controller.ShowControl(); handled = true; }
                     else if ((uint)message == OffMessage) { controller.StopDock(); controller.ShowControl(); handled = true; }
                     else if ((uint)message == ExitMessage) { controller.Exit(); handled = true; }
                     else if ((uint)message == FolderMessage) { controller.ShowFolders(); handled = true; }
+                    else if ((uint)message == TopBarMessage) { controller.StartTopBar(); controller.ShowControl(); handled = true; }
+                    else if ((uint)message == TopBarOffMessage) { controller.StopTopBar(); controller.ShowControl(); handled = true; }
+                    else if (message == 0x0312 && wp.ToInt32() == 2) { controller.ToggleTopBar(); handled = true; }
                     return IntPtr.Zero;
                 });
             };
             Closing += delegate(object sender, System.ComponentModel.CancelEventArgs args)
             {
                 if (controller.Exiting) return;
-                if (controller.IsRunning || controller.HasOpenTools) { args.Cancel = true; Hide(); }
+                if (controller.IsRunning || controller.IsTopBarRunning || controller.HasOpenTools) { args.Cancel = true; Hide(); }
             };
-            Closed += delegate { if (controller.ExitWhenWindowCloses && !controller.Exiting) controller.Exit(); };
+            Closed += delegate { Native.UnregisterHotKey(new WindowInteropHelper(this).Handle, 2); if (controller.ExitWhenWindowCloses && !controller.Exiting) controller.Exit(); };
             RefreshState();
         }
         internal void RefreshState()
@@ -153,9 +193,13 @@ namespace CoolMac
             OnButton.IsEnabled = !running; OnButton.Opacity = running ? .35 : 1;
             OffButton.IsEnabled = running; OffButton.Opacity = running ? 1 : .35;
             settings.IsEnabled = running; settings.Opacity = running ? 1 : .4;
-            closing.Text = running ? "Closing this window keeps the dock running. Open the EXE again to return here." : "Your off setting is remembered. Close this window to exit the app.";
+            bool barRunning = controller.IsTopBarRunning;
+            topBarState.Text = barRunning ? "Top bar is on" : "Top bar is off";
+            TopBarOnButton.IsEnabled = !barRunning; TopBarOnButton.Opacity = barRunning ? .35 : 1;
+            TopBarOffButton.IsEnabled = barRunning; TopBarOffButton.Opacity = barRunning ? 1 : .35;
+            closing.Text = running || barRunning ? "Closing this window keeps your desktop bars running. Open the EXE again to return here." : "Your off settings are remembered. Close this window to exit the app.";
         }
-        internal void ShowSaveError() { error.Text = "The dock changed state, but the preference could not be saved."; error.Visibility = Visibility.Visible; }
+        internal void ShowSaveError() { error.Text = "The desktop changed state, but the preference could not be saved."; error.Visibility = Visibility.Visible; }
         internal static bool Signal(uint message)
         {
             IntPtr handle = IntPtr.Zero;

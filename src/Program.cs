@@ -16,6 +16,18 @@ namespace CoolMac
         private static int Main(string[] args)
         {
             if (args.Length > 0 && args[0] == "--global-folder-helper") return GlobalFolderTheme.Helper(args);
+            if (args.Length > 0 && args[0] == "--topbar-crash-probe")
+            {
+                Application probeApp = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                DockController probe = new DockController(Preferences.Defaults(), false, false); probe.StartTopBar();
+                DispatcherTimer pulse = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+                pulse.Tick += delegate { File.WriteAllText(args[1], probe.TopBar.Reserved ? "reserved" : "failed"); Environment.Exit(0); }; pulse.Start(); probeApp.Run(); return 0;
+            }
+            if (args.Length > 0 && args[0] == "--verify-topbar")
+            {
+                Application testApp = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                int result = TopBarVerification.Live(args[1]); testApp.Shutdown(); return result;
+            }
             if (args.Length > 0 && args[0] == "--refresh-global-folders")
             {
                 GlobalFolderBackup theme = GlobalFolderTheme.Read();
@@ -51,6 +63,7 @@ namespace CoolMac
             {
                 FolderIcons.CreateDemo(Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar)).FullName); return 0;
             }
+            if (args.Length > 0 && args[0] == "--topbar-off") { ControlWindow.Signal(ControlWindow.TopBarOffMessage); return 0; }
             if (args.Length > 0 && (args[0] == "--off" || args[0] == "--quit"))
             {
                 if (!ControlWindow.Signal(args[0] == "--off" ? ControlWindow.OffMessage : ControlWindow.ExitMessage)) ControlWindow.StopLegacyDock();
@@ -59,11 +72,12 @@ namespace CoolMac
             bool created;
             using (Mutex singleton = new Mutex(true, "Local\\CoolMaconWindows.Dock", out created))
             {
-                if (!created) { if (!ControlWindow.Signal(args.Contains("--folders") ? ControlWindow.FolderMessage : args.Contains("--paused") ? ControlWindow.OffMessage : ControlWindow.ShowMessage)) MessageBox.Show("The dock is starting. Open the app again in a moment.", "CoolMac Dock"); return 0; }
+                if (!created) { if (!ControlWindow.Signal(args.Contains("--topbar") ? ControlWindow.TopBarMessage : args.Contains("--folders") ? ControlWindow.FolderMessage : args.Contains("--paused") ? ControlWindow.OffMessage : ControlWindow.ShowMessage)) MessageBox.Show("The app is starting. Open it again in a moment.", "CoolMac Dock"); return 0; }
                 Application app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
                 DockController controller = new DockController(SettingsStore.Load(SettingsStore.FilePath), false, true);
                 if (args.Contains("--paused")) controller.Preferences.DockEnabled = false;
                 if (args.Contains("--resume")) controller.Preferences.DockEnabled = true;
+                if (args.Contains("--topbar")) controller.Preferences.TopBarEnabled = true;
                 app.DispatcherUnhandledException += delegate(object sender, DispatcherUnhandledExceptionEventArgs error)
                 {
                     SettingsStore.Log(error.Exception); controller.Cleanup();
@@ -75,6 +89,7 @@ namespace CoolMac
                 {
                     controller.ShowControl();
                     if (controller.Preferences.DockEnabled) controller.StartDock(); else controller.StopDock();
+                    if (controller.Preferences.TopBarEnabled) controller.StartTopBar();
                     if (args.Contains("--folders")) controller.ShowFolders();
                     app.Run();
                 }
@@ -107,6 +122,8 @@ namespace CoolMac
                     Check(SettingsStore.Load(settingsFile).IconSize == 40, "Existing settings are replaced atomically", report);
                     loaded.DockEnabled = false; SettingsStore.Save(loaded, settingsFile);
                     Check(!SettingsStore.Load(settingsFile).DockEnabled, "Turned-off preference survives reopening the app", report);
+                    loaded.TopBarEnabled = true; SettingsStore.Save(loaded, settingsFile);
+                    Check(SettingsStore.Load(settingsFile).TopBarEnabled && !SettingsStore.Load(settingsFile).DockEnabled, "Top bar enabled state persists independently of the dock", report);
                     File.WriteAllText(settingsFile, "invalid JSON"); Check(SettingsStore.Load(settingsFile).Pins.Count >= 4, "Corrupt settings recover to usable default pins", report); File.Delete(settingsFile);
                     string explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
                     BitmapSource icon = Native.Icon(explorer);
@@ -126,6 +143,7 @@ namespace CoolMac
                     settings.Show(); settings.UpdateLayout(); Snapshot(settings, Path.Combine(directory, "settings.png"));
                     settings.Close(); dock.Close();
                     VerifyControls(directory, report);
+                    TopBarVerification.Preview(directory, report);
                     FolderVerification.Run(directory, report);
                     if (live) VerifyDesktop(directory, report);
                     app.Shutdown();
@@ -223,6 +241,10 @@ namespace CoolMac
         internal static void Snapshot(Window window, string path)
         {
             FrameworkElement content = window.Content as FrameworkElement;
+            SnapshotElement(content, path);
+        }
+        internal static void SnapshotElement(FrameworkElement content, string path)
+        {
             int width = (int)Math.Ceiling(content.ActualWidth), height = (int)Math.Ceiling(content.ActualHeight);
             RenderTargetBitmap render = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
             RenderTargetBitmap contentImage = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32); contentImage.Render(content);

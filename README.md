@@ -1,16 +1,30 @@
 # CoolMaconWindows
 
-A native Windows dock with a mac-inspired floating shelf and folder icons. Windows apps keep their own icons and behavior.
+A native Windows dock, top menu bar, and folder icons inspired by macOS. Windows apps keep their own icons and behavior.
 
 ## Run
 
 Double-click **launch.cmd**, or run **bin/CoolMacDock.exe** after building. The EXE opens a control window showing **Dock is on** or **Dock is off**, with separate **Turn on dock** and **Turn off dock** buttons. Opening the EXE again brings that same control window forward.
 
-**Turn off dock** immediately restores the Windows taskbar and keeps the controls open. The app remembers this choice: reopening it after switching off leaves the dock off until you turn it on. Closing the control window while the dock is on keeps the dock running; closing it while the dock is off exits the app. **Exit app** turns the dock off and closes the app.
+**Turn off dock** immediately restores the Windows taskbar and keeps the controls open. The app remembers this choice: reopening it after switching off leaves the dock off until you turn it on. Closing the control window while either desktop bar is on keeps the app running. When both are off, closing it exits the app. **Exit app** turns both bars off and closes the app.
 
 The exact EXE location in this checkout is `C:\Users\ferro\Desktop\Project AI\CoolMaconWindows\bin\CoolMacDock.exe`. The control window also has an **Open EXE folder** button.
 
 The dock does not install a service or configure startup. It runs as the current user; changing Windows default folder icons requests administrator permission through Windows. Preferences are stored in `%LOCALAPPDATA%\CoolMaconWindows\settings.json`.
+
+## Top bar
+
+Click **Turn on top bar** in the EXE's desktop controls. It has its own remembered on/off state and works with the dock on or off. **Turn off top bar** removes it immediately and returns the reserved screen space to your apps. **Ctrl+Alt+M** toggles it while CoolMac is running, unless another application owns that shortcut. The **C** menu opens the controls and provides an exit option.
+
+The slim translucent bar follows the display selected in dock settings and scales with its display DPI. Windows maximized apps fit below it. It hides while a fullscreen app is active and registers again when Explorer restarts. Windows releases the reservation when the process closes or crashes.
+
+- The current app name updates from the foreground Windows app. Its menu brings the window forward, minimizes it, maximizes/restores it, or requests a normal close. Application-specific menus remain in their Windows apps.
+- **Go** opens This PC, Desktop, Documents, Pictures, Home, and Downloads. **Window** switches between open app windows.
+- Network status opens Windows network settings. The volume popup adjusts the current default playback device and includes mute/unmute. Battery status appears when Windows reports a battery.
+- Search opens Windows Search with Win+S. Control Center opens network, Bluetooth, display, and sound settings, and toggles the dock.
+- The clock opens a calendar and date/time settings. Time follows your Windows locale and time zone.
+
+The top bar stays out of Alt+Tab and does not take app focus when it appears. No Windows app menus or system binaries are patched.
 
 ## Folder icons
 
@@ -90,6 +104,8 @@ bin\CoolMacDock.exe --verify "C:\absolute\path\to\verification-output" --live
 
 This briefly hides/restores the taskbar, checks the work area reserved for maximized windows, and verifies recovery after an abrupt child-process exit. It also verifies the taskbar's physical screen position, waits for delayed Explorer updates, and tests recovery from a stale hidden-window snapshot. It restores the original taskbar state after checking. Do not run integration verification alongside a running copy of the dock.
 
+`bin\CoolMacDock.exe --verify-topbar "C:\absolute\path\to\verification-output"` verifies the top bar's real work-area reservation, focus preservation, repeated on/off restoration, default audio-device access, coexistence with the dock, and reservation cleanup after an abrupt process exit. Run it with both desktop bars off. The normal `-Verify` also renders the top bar, volume popup, calendar, and Control Center and tests the independent controls.
+
 ## Current scope
 
 - One dock on the selected display. Taskbar replacement applies to all Windows taskbars; per-display independent docks are future work.
@@ -106,6 +122,9 @@ This briefly hides/restores the taskbar, checks the work area reserved for maxim
 - `src/Models.cs`: pin data, normalization, atomic settings persistence, and animation math.
 - `src/Program.cs`: application lifecycle, single-instance guard, recovery helper, and verification entry points.
 - `src/ControlWindow.cs`: running status, on/off controls, remembered enabled state, and reopening the running app.
+- `src/TopBarWindow.cs`: top-edge AppBar, foreground app/window menus, folder navigation, system status, calendar, and Control Center.
+- `src/AudioEndpoint.cs`: Windows Core Audio playback volume and mute controls.
+- `src/TopBarVerification.cs`: top-bar rendering, independent lifecycle, work-area restoration, and crash verification.
 - `src/FolderArt.cs`: original folder artwork, color variants, embossed symbols, and multi-size ICO generation.
 - `src/FolderIcons.cs`: per-folder customization, durable backups, restoration, and shell refresh notifications.
 - `src/GlobalFolderTheme.cs`: default Windows folder icons, elevated helper, desktop/common-folder styling, and Explorer refresh.
